@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package llm;
+option go_package = "go_llm_service/proto";
+
+service LLMService {
+  rpc ProcessText (TextRequest) returns (TextResponse) {}
+}
+
+message TextRequest {
+  string text = 1;
+}
+
+message TextResponse {
+  string response = 1;
+} 

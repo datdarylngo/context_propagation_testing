@@ -16,13 +16,17 @@ This project consists of two microservices:
 
 ### Go LLM Service
 
+#### Initial Setup
+
 1. Make sure you're using Go 1.20:
    ```bash
    go version  # Should show go1.20.x
    ```
 
-2. Create a `.env` file in the root directory with your configuration:
-   ```env
+2. Create a `.env` file in the go_llm_service directory:
+   ```bash
+   cd go_llm_service
+   cat > .env << 'EOF'
    # OpenAI Configuration
    OPENAI_API_KEY=your-openai-api-key  # Must be 51 characters starting with 'sk-'
 
@@ -31,57 +35,73 @@ This project consists of two microservices:
    PHOENIX_CLIENT_HEADERS=api_key=your-phoenix-api-key
    PHOENIX_COLLECTOR_ENDPOINT=https://app.phoenix.arize.com
    PHOENIX_API_KEY=your-phoenix-api-key
+   EOF
    ```
 
-3. Navigate to the Go service directory:
-   ```bash
-   cd go_llm_service
-   ```
+#### Running the Service
 
-4. Clean and initialize the Go modules:
-   ```bash
-   # Remove existing module files
-   rm -f go.sum
-   go clean -modcache
+IMPORTANT: Run these commands in order whenever you:
+- Change environment variables
+- Update Go code
+- Modify dependencies
 
-   # Install dependencies (this step is crucial)
-   go mod tidy
+```bash
+# 1. Navigate to the service directory
+cd go_llm_service
 
-   # Verify modules are correct
-   go mod verify
-   ```
+# 2. Clean up existing builds
+rm -f go.sum
+go clean -modcache
 
-5. Run the Go server:
-   ```bash
-   go run main.go otel.go
-   ```
-   You should see output like:
-   ```
-   Server starting at http://localhost:8080
-   ```
+# 3. Install dependencies
+go mod tidy
 
-6. Open your web browser and visit the printed URL:
-   ```
-   http://localhost:8080
-   ```
+# 4. Run the service
+go run main.go otel.go grpc.go
+```
 
-### Troubleshooting
+You should see output exactly like this:
+```
+Environment variables loaded successfully:
+  OPENAI_API_KEY: sk-z...2Ghs
+  PHOENIX_COLLECTOR_ENDPOINT: https://app.phoenix.arize.com
+  PHOENIX_API_KEY: KQ9P...xy2y
+  OTEL_EXPORTER_OTLP_HEADERS: api_key=KQ9Pzpz15ydRbpGepdv4:9yiixy2y
+  PHOENIX_CLIENT_HEADERS: api_key=KQ9Pzpz15ydRbpGepdv4:9yiixy2y
+Initializing tracer...
+Setting up OTLP with headers configured
+OTLP client created
+Exporter created
+Resource created
+TracerProvider created
+Tracer initialization complete
 
-1. OpenAI API Key:
+===========================================
+🚀 Server starting at http://localhost:8080
+===========================================
+```
+
+If you don't see this exact output, something is wrong. Check the troubleshooting section.
+
+#### Troubleshooting
+
+1. Environment Variables:
+   - `.env` file must be in the `go_llm_service` directory
+   - No spaces around the '=' signs
+   - No quotes around values
+   - No trailing spaces
+   - If variables aren't loading, run the commands in order again
+
+2. OpenAI API Key:
    - Must be 51 characters long
    - Must start with 'sk-'
    - No spaces or newlines
    - If you see "Warning: API key length is X", verify your key
 
-2. Module Issues:
-   - Always run `go mod tidy` after cleaning
-   - Make sure you're in the `go_llm_service` directory
-   - If you see dependency errors, repeat steps 4-5
-
-3. Environment Variables:
-   - `.env` file should be in the root directory
-   - No spaces around the '=' signs
-   - No quotes around values
+3. Common Issues:
+   - "undefined: initTracer" - Make sure to run both files: `go run main.go otel.go`
+   - "missing go.sum entry" - Run `go mod tidy`
+   - Empty environment variables - Check `.env` file location and format
 
 ### Features
 The UI provides a chat interface where you can:

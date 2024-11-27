@@ -2,9 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"log"
-	"os"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -17,26 +16,67 @@ import (
 	"google.golang.org/grpc"
 )
 
+// UISpanExporter sends spans to both UI and console
+type UISpanExporter struct {
+	messages chan<- string
+}
+
+func (e *UISpanExporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpan) error {
+	for _, span := range spans {
+		// Convert attributes to a map for better JSON serialization
+		attrs := make(map[string]string)
+		for _, kv := range span.Attributes() {
+			attrs[string(kv.Key)] = kv.Value.Emit()
+		}
+
+		// Format span data as JSON
+		spanData := map[string]interface{}{
+			"type":       "span",
+			"name":       span.Name(),
+			"trace_id":   span.SpanContext().TraceID().String(),
+			"span_id":    span.SpanContext().SpanID().String(),
+			"start":      span.StartTime().Format(time.RFC3339),
+			"end":        span.EndTime().Format(time.RFC3339),
+			"attributes": attrs, // Use our converted attributes
+		}
+
+		// Convert to JSON
+		jsonData, err := json.Marshal(spanData)
+		if err != nil {
+			fmt.Printf("Error marshaling span data: %v\n", err)
+			continue
+		}
+
+		// Send to UI
+		e.messages <- string(jsonData)
+
+		// Also print to console for debugging
+		fmt.Printf("Span: %s\n", span.Name())
+		fmt.Printf("  TraceID: %s\n", span.SpanContext().TraceID().String())
+		fmt.Printf("  SpanID: %s\n", span.SpanContext().SpanID().String())
+		fmt.Printf("  Attributes:\n")
+		for _, kv := range span.Attributes() {
+			fmt.Printf("    %s: %s\n", kv.Key, kv.Value.Emit())
+		}
+		fmt.Println()
+	}
+	return nil
+}
+
+func (e *UISpanExporter) Shutdown(ctx context.Context) error {
+	return nil
+}
+
 func initTracer() (func(context.Context) error, error) {
 	fmt.Println("Initializing tracer...")
 
-	// Print all environment variables for debugging
-	fmt.Println("Environment variables:")
-	fmt.Printf("PHOENIX_COLLECTOR_ENDPOINT: %s\n", os.Getenv("PHOENIX_COLLECTOR_ENDPOINT"))
-	fmt.Printf("PHOENIX_API_KEY: %s\n", os.Getenv("PHOENIX_API_KEY"))
-	fmt.Printf("OTEL_EXPORTER_OTLP_HEADERS: %s\n", os.Getenv("OTEL_EXPORTER_OTLP_HEADERS"))
-
-	endpoint := os.Getenv("PHOENIX_COLLECTOR_ENDPOINT")
-	if endpoint == "" {
-		log.Fatal("PHOENIX_COLLECTOR_ENDPOINT is not set")
+	// Create UI exporter
+	uiExporter := &UISpanExporter{
+		messages: uiMessages,
 	}
-	fmt.Printf("Using Phoenix endpoint: %s\n", endpoint)
 
-	apiKey := os.Getenv("PHOENIX_API_KEY")
-	if apiKey == "" {
-		log.Fatal("PHOENIX_API_KEY is not set")
-	}
-	fmt.Printf("Phoenix API Key found with length: %d\n", len(apiKey))
+	endpoint := envVars["PHOENIX_COLLECTOR_ENDPOINT"]
+	apiKey := envVars["PHOENIX_API_KEY"]
 
 	headers := map[string]string{
 		"api_key": apiKey,
@@ -46,7 +86,7 @@ func initTracer() (func(context.Context) error, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	client := otlptracegrpc.NewClient(
+	phoenixClient := otlptracegrpc.NewClient(
 		otlptracegrpc.WithEndpoint(endpoint),
 		otlptracegrpc.WithHeaders(headers),
 		otlptracegrpc.WithInsecure(),
@@ -54,12 +94,11 @@ func initTracer() (func(context.Context) error, error) {
 	)
 	fmt.Println("OTLP client created")
 
-	exp, err := otlptrace.New(ctx, client)
+	phoenixExp, err := otlptrace.New(ctx, phoenixClient)
 	if err != nil {
-		fmt.Printf("Error creating exporter: %v\n", err)
-		return nil, err
+		fmt.Printf("Error creating Phoenix exporter: %v\n", err)
 	}
-	fmt.Println("Exporter created")
+	fmt.Println("Phoenix exporter created")
 
 	res, err := resource.New(ctx,
 		resource.WithAttributes(
@@ -72,10 +111,22 @@ func initTracer() (func(context.Context) error, error) {
 	}
 	fmt.Println("Resource created")
 
+	// Create processors for both exporters
+	var processors []sdktrace.SpanProcessor
+	processors = append(processors, sdktrace.NewBatchSpanProcessor(uiExporter))
+	if phoenixExp != nil {
+		processors = append(processors, sdktrace.NewBatchSpanProcessor(phoenixExp))
+	}
+
 	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithBatcher(exp),
 		sdktrace.WithResource(res),
 	)
+
+	// Register all processors
+	for _, processor := range processors {
+		tp.RegisterSpanProcessor(processor)
+	}
+
 	fmt.Println("TracerProvider created")
 
 	otel.SetTracerProvider(tp)

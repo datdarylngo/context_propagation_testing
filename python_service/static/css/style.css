@@ -10,12 +10,6 @@ body {
     margin: 0 auto;
 }
 
-h1 {
-    text-align: center;
-    color: #333;
-    margin-bottom: 20px;
-}
-
 .chat-container {
     background-color: white;
     border-radius: 8px;
@@ -56,22 +50,6 @@ h1 {
 
 #send-button:hover {
     background-color: #0056b3;
-}
-
-.message {
-    margin: 10px 0;
-    padding: 10px;
-    border-radius: 4px;
-}
-
-.message.user {
-    background-color: #e3f2fd;
-    margin-left: 20%;
-}
-
-.message.system {
-    background-color: #f5f5f5;
-    margin-right: 20%;
 }
 
 .panels {
@@ -116,28 +94,4 @@ h1 {
 .log-entry.attribute {
     color: #006600;
     margin-left: 20px;
-    font-family: monospace;
-    padding: 2px 0;
-}
-
-.log-entry.grpc {
-    color: #cc6600;
-}
-
-.span-header {
-    font-weight: bold;
-    color: #0066cc;
-    margin-bottom: 5px;
-}
-
-.span-id {
-    color: #666;
-    font-family: monospace;
-    margin-left: 10px;
-}
-
-.span-time {
-    color: #666;
-    font-size: 0.9em;
-    margin-left: 10px;
 } 
